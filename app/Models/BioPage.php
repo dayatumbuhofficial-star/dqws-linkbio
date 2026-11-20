@@ -14,6 +14,7 @@ class BioPage extends Model
         'title',
         'bio',
         'avatar',
+        'login_logo',
         'footer_text',
         'draft_theme',
         'published_theme',

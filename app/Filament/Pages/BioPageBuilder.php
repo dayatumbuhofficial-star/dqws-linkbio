@@ -112,69 +112,6 @@ class BioPageBuilder extends Page
                 Tabs::make('BuilderTabs')
                     ->persistTabInQueryString()
                     ->tabs([
-                        Tab::make('Profil')
-                            ->icon('heroicon-o-user-circle')
-                            ->schema([
-                                FileUpload::make('avatar')
-                                    ->label('Avatar / Logo DQWS')
-                                    ->image()
-                                    ->avatar()
-                                    ->disk('public')
-                                    ->directory('avatars')
-                                    ->visibility('public')
-                                    ->live(),
-                                TextInput::make('title')
-                                    ->label('Judul Halaman')
-                                    ->required()
-                                    ->maxLength(150)
-                                    ->live(debounce: 250),
-                                Textarea::make('bio')
-                                    ->label('Bio Singkat')
-                                    ->rows(3)
-                                    ->maxLength(500)
-                                    ->live(debounce: 250),
-                                TextInput::make('footer_text')
-                                    ->label('Teks Footer')
-                                    ->default('© 2026 DQWS Link-in-Bio')
-                                    ->maxLength(150)
-                                    ->live(debounce: 250),
-                                Toggle::make('theme.show_search')
-                                    ->label('Tampilkan Kolom Pencarian (Search) di Halaman Publik')
-                                    ->default(true)
-                                    ->live(),
-                                Repeater::make('theme.social_icons')
-                                    ->label('Baris Ikon Sosial Media (Social Icons Bar)')
-                                    ->reorderable()
-                                    ->collapsible()
-                                    ->addActionLabel('Tambah Ikon Sosial Media')
-                                    ->default([])
-                                    ->live()
-                                    ->schema([
-                                        Grid::make(2)
-                                            ->schema([
-                                                Select::make('platform')
-                                                    ->label('Platform')
-                                                    ->options([
-                                                        'instagram' => 'Instagram',
-                                                        'youtube' => 'YouTube',
-                                                        'tiktok' => 'TikTok',
-                                                        'facebook' => 'Facebook',
-                                                        'whatsapp' => 'WhatsApp',
-                                                        'telegram' => 'Telegram',
-                                                        'website' => 'Website',
-                                                        'maps' => 'Google Maps',
-                                                    ])
-                                                    ->default('instagram')
-                                                    ->required()
-                                                    ->live(),
-                                                TextInput::make('url')
-                                                    ->label('URL Tujuan')
-                                                    ->placeholder('https://...')
-                                                    ->live(debounce: 250),
-                                            ]),
-                                    ]),
-                            ]),
-
                         Tab::make('Desain & Tema')
                             ->icon('heroicon-o-swatch')
                             ->schema([
@@ -407,29 +344,6 @@ class BioPageBuilder extends Page
                                             ->live(),
                                     ]),
                             ]),
-
-                        Tab::make('Tracking & SEO')
-                            ->icon('heroicon-o-chart-pie')
-                            ->schema([
-                                TextInput::make('theme.meta_pixel_id')
-                                    ->label('Meta (Facebook) Pixel ID')
-                                    ->placeholder('Contoh: 123456789012345')
-                                    ->helperText('Otomatis melacak PageView dan event Lead saat tombol/banner diklik.')
-                                    ->maxLength(64)
-                                    ->live(debounce: 250),
-                                TextInput::make('theme.tiktok_pixel_id')
-                                    ->label('TikTok Pixel ID')
-                                    ->placeholder('Contoh: C123456789ABCDEF')
-                                    ->helperText('Otomatis melacak PageView dan event ClickButton.')
-                                    ->maxLength(64)
-                                    ->live(debounce: 250),
-                                TextInput::make('theme.gtm_id')
-                                    ->label('Google Tag Manager (GTM) ID')
-                                    ->placeholder('Contoh: GTM-XXXXXXX')
-                                    ->helperText('Memasang container GTM di <head> & <body> serta mengirim event bio_click ke dataLayer.')
-                                    ->maxLength(64)
-                                    ->live(debounce: 250),
-                            ]),
                     ]),
             ]);
     }
@@ -496,33 +410,42 @@ class BioPageBuilder extends Page
     protected function extractNormalizedPayload(): array
     {
         $state = $this->form->getState();
+        $this->bioPage->refresh();
 
-        $title = trim((string) ($state['title'] ?? $this->data['title'] ?? 'Darul Quran Was Sunnah (DQWS)'));
-        $bio = $state['bio'] ?? $this->data['bio'] ?? null;
-        $avatar = BioPage::unwrapFilePath($state['avatar'] ?? $this->data['avatar'] ?? null);
-        $footerText = (string) ($state['footer_text'] ?? $this->data['footer_text'] ?? '© 2026 DQWS Link-in-Bio');
+        $dbDraftTheme = is_array($this->bioPage->draft_theme ?? null) ? $this->bioPage->draft_theme : [];
+
+        $title = trim((string) ($this->bioPage->title ?: 'Darul Quran Was Sunnah (DQWS)'));
+        $bio = $this->bioPage->bio;
+        $avatar = $this->bioPage->avatar;
+        $footerText = (string) ($dbDraftTheme['footer_text'] ?? $this->bioPage->footer_text ?? '© 2026 DQWS Link-in-Bio');
 
         $rawTheme = array_merge(
             BioPage::defaultTheme(),
+            $dbDraftTheme,
             is_array($this->data['theme'] ?? null) ? $this->data['theme'] : [],
             is_array($state['theme'] ?? null) ? $state['theme'] : []
         );
 
+        // Pertahankan pengaturan dari halaman Profil, Ikon Sosmed, dan Tracking & SEO terbaru di DB
         $rawTheme['footer_text'] = $footerText;
-        $rawTheme['show_search'] = (bool) ($rawTheme['show_search'] ?? true);
+        $rawTheme['show_search'] = (bool) ($dbDraftTheme['show_search'] ?? $rawTheme['show_search'] ?? true);
+        $rawTheme['social_icons'] = is_array($dbDraftTheme['social_icons'] ?? null)
+            ? array_values($dbDraftTheme['social_icons'])
+            : (is_array($rawTheme['social_icons'] ?? null) ? array_values($rawTheme['social_icons']) : []);
+        $rawTheme['meta_pixel_id'] = (string) ($dbDraftTheme['meta_pixel_id'] ?? $rawTheme['meta_pixel_id'] ?? '');
+        $rawTheme['tiktok_pixel_id'] = (string) ($dbDraftTheme['tiktok_pixel_id'] ?? $rawTheme['tiktok_pixel_id'] ?? '');
+        $rawTheme['gtm_id'] = (string) ($dbDraftTheme['gtm_id'] ?? $rawTheme['gtm_id'] ?? '');
+
         $rawTheme['popup_enabled'] = (bool) ($rawTheme['popup_enabled'] ?? false);
         $rawTheme['popup_image'] = BioPage::unwrapFilePath($rawTheme['popup_image'] ?? null);
         $rawTheme['popup_cta_url'] = BioPage::normalizeUrl($rawTheme['popup_cta_url'] ?? '');
 
-        $socialIcons = [];
-        foreach (array_values($rawTheme['social_icons'] ?? []) as $soc) {
-            if (! is_array($soc) || empty($soc['url'])) {
-                continue;
-            }
-            $soc['url'] = BioPage::normalizeUrl($soc['url']);
-            $socialIcons[] = $soc;
-        }
-        $rawTheme['social_icons'] = $socialIcons;
+        // Sinkronkan juga ke state lokal untuk Live Preview
+        $this->data['title'] = $title;
+        $this->data['bio'] = $bio;
+        $this->data['avatar'] = $avatar;
+        $this->data['footer_text'] = $footerText;
+        $this->data['theme'] = $rawTheme;
 
         $rawBlocks = is_array($state['blocks'] ?? null)
             ? $state['blocks']
