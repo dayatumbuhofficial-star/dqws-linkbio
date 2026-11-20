@@ -276,6 +276,77 @@ class BioPageBuilder extends Page
                                                 ...$this->scheduleFields(),
                                             ]),
 
+                                        Block::make('video')
+                                            ->label('Video (Embed / Upload)')
+                                            ->icon('heroicon-o-video-camera')
+                                            ->schema([
+                                                Hidden::make('id')
+                                                    ->default(fn (): string => (string) Str::uuid()),
+                                                TextInput::make('title')
+                                                    ->label('Judul / Caption Video (Opsional)')
+                                                    ->placeholder('Contoh: Profil Pondok Pesantren DQWS')
+                                                    ->maxLength(150)
+                                                    ->live(debounce: 250),
+                                                Select::make('source_type')
+                                                    ->label('Sumber Video')
+                                                    ->options([
+                                                        'embed' => 'Embed Link YouTube / Vimeo',
+                                                        'upload' => 'Upload File Video MP4',
+                                                    ])
+                                                    ->default('embed')
+                                                    ->required()
+                                                    ->selectablePlaceholder(false)
+                                                    ->live(),
+                                                TextInput::make('url')
+                                                    ->label('URL Video (YouTube / Shorts / Vimeo)')
+                                                    ->placeholder('https://www.youtube.com/watch?v=...')
+                                                    ->visible(fn (Get $get): bool => ($get('source_type') ?? 'embed') === 'embed')
+                                                    ->live(debounce: 250),
+                                                FileUpload::make('video_file')
+                                                    ->label('Upload File Video (MP4 / WebM)')
+                                                    ->helperText('Maksimal 50 MB (format MP4 / WebM).')
+                                                    ->disk('public')
+                                                    ->directory('videos')
+                                                    ->visibility('public')
+                                                    ->acceptedFileTypes(['video/mp4', 'video/webm'])
+                                                    ->maxSize(51200)
+                                                    ->visible(fn (Get $get): bool => ($get('source_type') ?? 'embed') === 'upload')
+                                                    ->live(),
+                                                ...$this->scheduleFields(),
+                                            ]),
+
+                                        Block::make('social_embed')
+                                            ->label('Embed Konten Sosmed')
+                                            ->icon('heroicon-o-globe-alt')
+                                            ->schema([
+                                                Hidden::make('id')
+                                                    ->default(fn (): string => (string) Str::uuid()),
+                                                TextInput::make('title')
+                                                    ->label('Judul / Label Konten (Opsional)')
+                                                    ->placeholder('Contoh: Kajian Terbaru DQWS')
+                                                    ->maxLength(150)
+                                                    ->live(debounce: 250),
+                                                Select::make('platform')
+                                                    ->label('Platform Sosial Media')
+                                                    ->options([
+                                                        'instagram' => 'Instagram (Post / Reel)',
+                                                        'tiktok' => 'TikTok Video',
+                                                        'facebook' => 'Facebook Post / Video',
+                                                        'x' => 'X (Twitter) Post',
+                                                    ])
+                                                    ->default('instagram')
+                                                    ->required()
+                                                    ->selectablePlaceholder(false)
+                                                    ->live(),
+                                                TextInput::make('url')
+                                                    ->label('URL Postingan / Reels / Video Sosmed')
+                                                    ->placeholder('https://www.instagram.com/p/... atau https://www.tiktok.com/...')
+                                                    ->url()
+                                                    ->required()
+                                                    ->live(debounce: 250),
+                                                ...$this->scheduleFields(),
+                                            ]),
+
                                         Block::make('section')
                                             ->label('Judul Seksi / Pemisah')
                                             ->icon('heroicon-o-minus')

@@ -114,6 +114,19 @@ class BioPage extends Model
                 $data['url'] = self::normalizeUrl($data['url']);
             }
 
+            if ($type === 'video') {
+                $data['source_type'] = in_array($data['source_type'] ?? '', ['embed', 'upload'], true)
+                    ? $data['source_type']
+                    : 'embed';
+                $data['video_file'] = self::unwrapFilePath($data['video_file'] ?? null);
+            }
+
+            if ($type === 'social_embed') {
+                $data['platform'] = in_array($data['platform'] ?? '', ['instagram', 'tiktok', 'facebook', 'x'], true)
+                    ? $data['platform']
+                    : 'instagram';
+            }
+
             if (in_array($type, ['carousel', 'banner_slide'], true)) {
                 $rawSlides = is_array($data['slides'] ?? null)
                     ? array_values($data['slides'])
@@ -171,5 +184,97 @@ class BioPage extends Model
         }
 
         return true;
+    }
+
+    public static function resolveVideoEmbedUrl(?string $url): ?string
+    {
+        $url = trim((string) $url);
+        if ($url === '' || $url === '#') {
+            return null;
+        }
+
+        // YouTube: watch?v=, youtu.be/, shorts/, embed/, live/
+        if (preg_match('/(?:youtube\.com\/(?:watch\?.*v=|shorts\/|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{6,20})/i', $url, $m)) {
+            return 'https://www.youtube.com/embed/' . $m[1];
+        }
+
+        // Vimeo: vimeo.com/{id} or player.vimeo.com/video/{id}
+        if (preg_match('/vimeo\.com\/(?:video\/)?(\d+)/i', $url, $m)) {
+            return 'https://player.vimeo.com/video/' . $m[1];
+        }
+
+        return $url;
+    }
+
+    /**
+     * @return array{embed_url: ?string, platform_label: string, aspect_class: string}
+     */
+    public static function resolveSocialEmbed(?string $platform, ?string $url): array
+    {
+        $platform = strtolower(trim((string) ($platform ?: 'instagram')));
+        $url = self::normalizeUrl($url);
+
+        $platformLabel = match ($platform) {
+            'instagram' => 'Instagram',
+            'tiktok' => 'TikTok',
+            'facebook' => 'Facebook',
+            'x' => 'X (Twitter)',
+            default => ucfirst($platform),
+        };
+
+        if ($url === '' || $url === '#') {
+            return [
+                'embed_url' => null,
+                'platform_label' => $platformLabel,
+                'aspect_class' => 'min-h-[420px]',
+            ];
+        }
+
+        if ($platform === 'instagram') {
+            if (preg_match('/(?:instagram\.com|instagr\.am)\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i', $url, $m)) {
+                $kind = strtolower($m[1]) === 'reels' ? 'reel' : strtolower($m[1]);
+                return [
+                    'embed_url' => "https://www.instagram.com/{$kind}/{$m[2]}/embed",
+                    'platform_label' => 'Instagram',
+                    'aspect_class' => 'min-h-[480px]',
+                ];
+            }
+        }
+
+        if ($platform === 'tiktok') {
+            if (preg_match('/tiktok\.com\/(?:.*\/video\/|embed\/v2\/)(\d+)/i', $url, $m)) {
+                return [
+                    'embed_url' => "https://www.tiktok.com/embed/v2/{$m[1]}",
+                    'platform_label' => 'TikTok',
+                    'aspect_class' => 'min-h-[540px]',
+                ];
+            }
+        }
+
+        if ($platform === 'facebook') {
+            $isVideo = (bool) preg_match('/(?:\/videos\/|\/reel\/|\/watch|fb\.watch)/i', $url);
+            $plugin = $isVideo ? 'video.php' : 'post.php';
+            return [
+                'embed_url' => "https://www.facebook.com/plugins/{$plugin}?href=" . urlencode($url) . '&show_text=' . ($isVideo ? 'false' : 'true') . '&width=500',
+                'platform_label' => 'Facebook',
+                'aspect_class' => $isVideo ? 'aspect-video min-h-[260px]' : 'min-h-[420px]',
+            ];
+        }
+
+        if ($platform === 'x') {
+            if (preg_match('/(?:twitter\.com|x\.com)\/[^\/]+\/status\/(\d+)/i', $url, $m)) {
+                return [
+                    'embed_url' => "https://platform.twitter.com/embed/Tweet.html?id={$m[1]}&theme=dark",
+                    'platform_label' => 'X (Twitter)',
+                    'aspect_class' => 'min-h-[380px]',
+                ];
+            }
+        }
+
+        return [
+            'embed_url' => null,
+            'platform_label' => $platformLabel,
+            'aspect_class' => 'min-h-[200px]',
+        ];
     }
 }

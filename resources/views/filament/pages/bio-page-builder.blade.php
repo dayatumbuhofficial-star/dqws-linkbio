@@ -75,6 +75,48 @@
                         if (typeof val !== 'string' || val === '') return null;
                         if (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/')) return val;
                         return '/storage/' + val;
+                    },
+                    resolveVideoEmbed(url) {
+                        if (!url || typeof url !== 'string') return null;
+                        const yt = url.match(/(?:youtube\.com\/(?:watch\?.*v=|shorts\/|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{6,20})/i);
+                        if (yt && yt[1]) return 'https://www.youtube.com/embed/' + yt[1];
+                        const vm = url.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+                        if (vm && vm[1]) return 'https://player.vimeo.com/video/' + vm[1];
+                        return url.startsWith('http') ? url : null;
+                    },
+                    resolveSocialEmbed(data) {
+                        const platform = (data?.platform || 'instagram').toLowerCase();
+                        const url = (data?.url || '').trim();
+                        if (!url) return null;
+                        if (platform === 'instagram') {
+                            const ig = url.match(/(?:instagram\.com|instagr\.am)\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i);
+                            if (ig && ig[2]) {
+                                const kind = ig[1].toLowerCase() === 'reels' ? 'reel' : ig[1].toLowerCase();
+                                return `https://www.instagram.com/${kind}/${ig[2]}/embed`;
+                            }
+                        }
+                        if (platform === 'tiktok') {
+                            const tt = url.match(/tiktok\.com\/(?:.*\/video\/|embed\/v2\/)(\d+)/i);
+                            if (tt && tt[1]) return `https://www.tiktok.com/embed/v2/${tt[1]}`;
+                        }
+                        if (platform === 'facebook') {
+                            const isVid = /(?:\/videos\/|\/reel\/|\/watch|fb\.watch)/i.test(url);
+                            const plugin = isVid ? 'video.php' : 'post.php';
+                            return `https://www.facebook.com/plugins/${plugin}?href=${encodeURIComponent(url)}&show_text=${isVid ? 'false' : 'true'}&width=320`;
+                        }
+                        if (platform === 'x') {
+                            const tw = url.match(/(?:twitter\.com|x\.com)\/[^\/]+\/status\/(\d+)/i);
+                            if (tw && tw[1]) return `https://platform.twitter.com/embed/Tweet.html?id=${tw[1]}&theme=dark`;
+                        }
+                        return null;
+                    },
+                    platformLabel(platform) {
+                        const p = (platform || 'instagram').toLowerCase();
+                        if (p === 'instagram') return 'Instagram';
+                        if (p === 'tiktok') return 'TikTok';
+                        if (p === 'facebook') return 'Facebook';
+                        if (p === 'x') return 'X (Twitter)';
+                        return platform;
                     }
                 }"
                 class="w-full max-w-[360px] rounded-[2.75rem] border-[10px] border-gray-900 dark:border-gray-800 bg-gray-900 shadow-2xl overflow-hidden relative"
@@ -277,6 +319,98 @@
                                                 >
                                                     &#10095;
                                                 </button>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                {{-- Video (Embed / Upload) --}}
+                                <template x-if="block.type === 'video'">
+                                    <div
+                                        class="w-full overflow-hidden backdrop-blur-md bg-white/10 border border-white/20 shadow-md"
+                                        :style="`border-radius: ${btnRadius};`"
+                                    >
+                                        <template x-if="block.data?.title">
+                                            <div class="px-3.5 py-2 border-b border-white/10 text-xs font-bold truncate" x-text="block.data.title"></div>
+                                        </template>
+
+                                        <template x-if="(block.data?.source_type || 'embed') === 'embed'">
+                                            <div class="w-full bg-black/40" style="aspect-ratio: 16 / 9;">
+                                                <template x-if="resolveVideoEmbed(block.data?.url)">
+                                                    <iframe
+                                                        :src="resolveVideoEmbed(block.data?.url)"
+                                                        class="w-full h-full border-0"
+                                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                        allowfullscreen
+                                                    ></iframe>
+                                                </template>
+                                                <template x-if="!resolveVideoEmbed(block.data?.url)">
+                                                    <div class="w-full h-full flex flex-col items-center justify-center p-4 text-center">
+                                                        <span class="text-xs font-semibold opacity-80">Video Embed (YouTube / Vimeo)</span>
+                                                        <span class="text-[10px] opacity-60 mt-1">Masukkan URL video untuk menampilkan preview</span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+
+                                        <template x-if="block.data?.source_type === 'upload'">
+                                            <div class="w-full bg-black/40" style="aspect-ratio: 16 / 9;">
+                                                <template x-if="resolveStorageUrl(block.data?.video_file)">
+                                                    <video
+                                                        :src="resolveStorageUrl(block.data?.video_file)"
+                                                        controls
+                                                        preload="metadata"
+                                                        class="w-full h-full object-contain"
+                                                    ></video>
+                                                </template>
+                                                <template x-if="!resolveStorageUrl(block.data?.video_file)">
+                                                    <div class="w-full h-full flex flex-col items-center justify-center p-4 text-center">
+                                                        <span class="text-xs font-semibold opacity-80">Upload Video MP4</span>
+                                                        <span class="text-[10px] opacity-60 mt-1">Simpan draft setelah upload untuk preview video</span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                {{-- Konten Sosial Media (Embed) --}}
+                                <template x-if="block.type === 'social_embed'">
+                                    <div
+                                        class="w-full overflow-hidden backdrop-blur-md bg-white/10 border border-white/20 shadow-md"
+                                        :style="`border-radius: ${btnRadius};`"
+                                    >
+                                        <div class="px-3.5 py-2.5 border-b border-white/15 flex items-center justify-between gap-2 bg-black/20">
+                                            <div class="flex items-center gap-1.5 min-w-0">
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-white/15" x-text="platformLabel(block.data?.platform)"></span>
+                                                <span class="text-xs font-bold truncate" x-text="block.data?.title || 'Postingan ' + platformLabel(block.data?.platform)"></span>
+                                            </div>
+                                            <a
+                                                :href="block.data?.url || '#'"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                class="text-[10px] font-semibold underline opacity-80 hover:opacity-100 shrink-0"
+                                            >
+                                                Buka &#8599;
+                                            </a>
+                                        </div>
+
+                                        <template x-if="resolveSocialEmbed(block.data)">
+                                            <div class="w-full bg-white/5 overflow-hidden" style="min-height: 320px;">
+                                                <iframe
+                                                    :src="resolveSocialEmbed(block.data)"
+                                                    class="w-full border-0"
+                                                    style="height: 360px;"
+                                                    scrolling="no"
+                                                    allow="encrypted-media"
+                                                ></iframe>
+                                            </div>
+                                        </template>
+
+                                        <template x-if="!resolveSocialEmbed(block.data)">
+                                            <div class="p-4 text-center bg-black/20">
+                                                <p class="text-xs font-semibold" x-text="block.data?.title || 'Embed ' + platformLabel(block.data?.platform)"></p>
+                                                <p class="text-[10px] opacity-70 mt-1 truncate" x-text="block.data?.url || 'Masukkan URL postingan sosmed...'"></p>
                                             </div>
                                         </template>
                                     </div>

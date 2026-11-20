@@ -138,7 +138,8 @@
                 : (is_array($b['slides'] ?? null) ? $b['slides'] : []);
             $sTitles = implode(' ', array_map(fn ($s) => $s['title'] ?? '', $rawSlides));
         }
-        $searchableCatalog[] = strtolower(trim(($d['label'] ?? '') . ' ' . ($d['title'] ?? '') . ' ' . ($d['description'] ?? '') . ' ' . $sTitles));
+        $extraMeta = ($d['platform'] ?? '') . ' ' . ($b['type'] ?? '');
+        $searchableCatalog[] = strtolower(trim(($d['label'] ?? '') . ' ' . ($d['title'] ?? '') . ' ' . ($d['description'] ?? '') . ' ' . $sTitles . ' ' . $extraMeta));
     }
 @endphp
 <body
@@ -450,6 +451,115 @@
                                 @endif
                             </div>
                         @endif
+
+                    @elseif ($type === 'video')
+                        @php
+                            $videoTitle = trim((string) ($data['title'] ?? ''));
+                            $sourceType = $data['source_type'] ?? 'embed';
+                            $videoEmbedUrl = $sourceType === 'embed'
+                                ? \App\Models\BioPage::resolveVideoEmbedUrl($data['url'] ?? null)
+                                : null;
+                            $videoFilePath = $sourceType === 'upload'
+                                ? \App\Models\BioPage::unwrapFilePath($data['video_file'] ?? null)
+                                : null;
+                            $videoFileUrl = $videoFilePath
+                                ? (str_starts_with($videoFilePath, 'http') ? $videoFilePath : asset('storage/' . ltrim($videoFilePath, '/')))
+                                : null;
+                        @endphp
+                        <div class="w-full overflow-hidden backdrop-blur-md bg-white/10 border border-white/25 shadow-lg {{ $btnStyleClass }}">
+                            @if ($videoTitle !== '')
+                                <div class="px-4 py-2.5 border-b border-white/15 bg-black/20 text-left">
+                                    <h3 class="text-xs sm:text-sm font-bold leading-snug">{{ $videoTitle }}</h3>
+                                </div>
+                            @endif
+
+                            @if ($sourceType === 'upload' && $videoFileUrl)
+                                <div class="w-full bg-black" style="aspect-ratio: 16 / 9;">
+                                    <video
+                                        src="{{ $videoFileUrl }}"
+                                        controls
+                                        preload="metadata"
+                                        playsinline
+                                        onplay="window.trackBioClick(@js($videoTitle ?: 'Video Upload'), 'video', @js($videoFileUrl))"
+                                        class="w-full h-full object-contain"
+                                    ></video>
+                                </div>
+                            @elseif ($videoEmbedUrl)
+                                <div class="w-full bg-black" style="aspect-ratio: 16 / 9;">
+                                    <iframe
+                                        src="{{ $videoEmbedUrl }}"
+                                        title="{{ $videoTitle ?: 'Video Embed' }}"
+                                        class="w-full h-full border-0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                        allowfullscreen
+                                        loading="lazy"
+                                    ></iframe>
+                                </div>
+                            @endif
+                        </div>
+
+                    @elseif ($type === 'social_embed')
+                        @php
+                            $socTitle = trim((string) ($data['title'] ?? ''));
+                            $socPlatform = strtolower((string) ($data['platform'] ?? 'instagram'));
+                            $socUrl = \App\Models\BioPage::normalizeUrl($data['url'] ?? '');
+                            $embedInfo = \App\Models\BioPage::resolveSocialEmbed($socPlatform, $socUrl);
+                            $embedUrl = $embedInfo['embed_url'];
+                            $platformLabel = $embedInfo['platform_label'];
+                        @endphp
+                        <div class="w-full overflow-hidden backdrop-blur-md bg-white/10 border border-white/25 shadow-lg {{ $btnStyleClass }}">
+                            <div class="px-4 py-3 border-b border-white/15 bg-black/25 flex items-center justify-between gap-3">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-white/15 border border-white/15 shrink-0">
+                                        {{ $platformLabel }}
+                                    </span>
+                                    <span class="text-xs sm:text-sm font-bold truncate">
+                                        {{ $socTitle !== '' ? $socTitle : "Konten {$platformLabel}" }}
+                                    </span>
+                                </div>
+                                @if ($socUrl !== '' && $socUrl !== '#')
+                                    <a
+                                        href="{{ $trackRedirectUrl }}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onclick="window.trackBioClick(@js($socTitle ?: 'Embed ' . $platformLabel), 'social_embed', @js($socUrl))"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-xs font-semibold transition shrink-0"
+                                    >
+                                        <span>Buka</span>
+                                        <span>&#8599;</span>
+                                    </a>
+                                @endif
+                            </div>
+
+                            @if ($embedUrl)
+                                <div class="w-full bg-black/20 overflow-hidden">
+                                    <iframe
+                                        src="{{ $embedUrl }}"
+                                        title="{{ $socTitle ?: $platformLabel }}"
+                                        class="w-full border-0"
+                                        style="min-height: {{ $socPlatform === 'tiktok' ? '560px' : ($socPlatform === 'instagram' ? '480px' : '400px') }};"
+                                        allow="encrypted-media; picture-in-picture"
+                                        allowfullscreen
+                                        loading="lazy"
+                                    ></iframe>
+                                </div>
+                            @elseif ($socUrl !== '' && $socUrl !== '#')
+                                <div class="p-5 text-center bg-black/15">
+                                    <p class="text-sm font-semibold mb-3">{{ $socTitle !== '' ? $socTitle : "Lihat Postingan di {$platformLabel}" }}</p>
+                                    <a
+                                        href="{{ $trackRedirectUrl }}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onclick="window.trackBioClick(@js($socTitle ?: 'Embed ' . $platformLabel), 'social_embed', @js($socUrl))"
+                                        class="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-bold shadow transition hover:scale-[1.02] {{ $btnStyleClass }}"
+                                        style="background-color: {{ $btnColor }}; color: {{ $btnTextColor }};"
+                                    >
+                                        <span>Buka Konten di {{ $platformLabel }}</span>
+                                        <span>&#8599;</span>
+                                    </a>
+                                </div>
+                            @endif
+                        </div>
                     @endif
                 </div>
             @endforeach
